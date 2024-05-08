@@ -6,10 +6,6 @@ import tiktoken
 from env import OPENAI_API_KEY
 openai.api_key = OPENAI_API_KEY
 
-from env import OPENAI_ORG
-openai.api_key = OPENAI_ORG
-
-
 COMPLETIONS_MODEL = "gpt-3.5-turbo" #i changed this from text-davinci-003 to 3.5 on the plane to vancouver. it might not work
 EMBEDDING_MODEL = "text-embedding-ada-002"
 question = input("Hi! What would you like to learn about the articles on Culture3?\n")
@@ -17,7 +13,7 @@ question = input("Hi! What would you like to learn about the articles on Culture
 df = pd.read_csv("./c3posts.csv", encoding = 'cp850')
 df = df.set_index(["Title", "SubSection"])
 
-#print(f"{len(df)} rows in the data.")
+#print(f"{len(df)} articles in the data.")
 
 def get_embedding(text: str, model: str=EMBEDDING_MODEL) -> 'list[float]':
     result = openai.Embedding.create(
@@ -29,21 +25,13 @@ def get_embedding(text: str, model: str=EMBEDDING_MODEL) -> 'list[float]':
 def compute_doc_embeddings(df: pd.DataFrame) -> "dict['tuple[str, str]', 'list[float]']":
     """
     Create an embedding for each row in the dataframe using the OpenAI Embeddings API.
-    
     Return a dictionary that maps between each embedding vector and the index of the row that it corresponds to.
     """
     return {
         idx: get_embedding(r.Content) for idx, r in df.iterrows()
     }
 
-def load_embeddings(fname: str) -> "dict['tuple[str, str]', 'list[float]']":
-    """
-    Read the document embeddings and their keys from a CSV.
-    
-    fname is the path to a CSV with exactly these named columns: 
-        "title", "heading", "0", "1", ... up to the length of the embedding vectors.
-    """
-    
+def load_embeddings(fname: str) -> "dict['tuple[str, str]', 'list[float]']":    
     df = pd.read_csv(fname, header=0)
     max_dim = max([int(c) for c in df.columns if c != "Title" and c != "SubSection"])
     return {
