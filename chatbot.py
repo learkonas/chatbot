@@ -5,21 +5,28 @@ import tiktoken
 
 from env import OPENAI_API_KEY
 openai.api_key = OPENAI_API_KEY
+import json
+with open('document_embeddings.json', 'r') as file:
+ loaded_data = json.load(file)
+document_embeddings = {eval(key): value for key, value in loaded_data.items()}
 
-from env import OPENAI_ORG
-openai.api_key = OPENAI_ORG
+count = 1
 
-
-COMPLETIONS_MODEL = "gpt-3.5-turbo" #i changed this from text-davinci-003 to 3.5 on the plane to vancouver. it might not work
+COMPLETIONS_MODEL = "gpt-3.5-turbo-instruct"
 EMBEDDING_MODEL = "text-embedding-ada-002"
-question = input("Hi! What would you like to learn about the articles on Culture3?\n")
+message = "Hi! What would you like to learn about the articles on Culture3?\n"
 
 df = pd.read_csv("./c3posts.csv", encoding = 'cp850')
 df = df.set_index(["Title", "SubSection"])
 
+#de_df = pd.read_csv("./document_embeddings.csv", encoding = 'cp850')
+#de_df = df.set_index(["doc_id", "embedding"])
+
 #print(f"{len(df)} rows in the data.")
 
+
 def get_embedding(text: str, model: str=EMBEDDING_MODEL) -> 'list[float]':
+    #print(f"getting embedding")
     result = openai.Embedding.create(
       model=model,
       input=text
@@ -27,38 +34,36 @@ def get_embedding(text: str, model: str=EMBEDDING_MODEL) -> 'list[float]':
     return result["data"][0]["embedding"]
 
 def compute_doc_embeddings(df: pd.DataFrame) -> "dict['tuple[str, str]', 'list[float]']":
-    """
-    Create an embedding for each row in the dataframe using the OpenAI Embeddings API.
-    
-    Return a dictionary that maps between each embedding vector and the index of the row that it corresponds to.
-    """
+    print(f"computing doc embedding")
     return {
         idx: get_embedding(r.Content) for idx, r in df.iterrows()
     }
 
 def load_embeddings(fname: str) -> "dict['tuple[str, str]', 'list[float]']":
-    """
-    Read the document embeddings and their keys from a CSV.
-    
-    fname is the path to a CSV with exactly these named columns: 
-        "title", "heading", "0", "1", ... up to the length of the embedding vectors.
-    """
-    
+    print(f"loading embeddings for ${fname}")
     df = pd.read_csv(fname, header=0)
     max_dim = max([int(c) for c in df.columns if c != "Title" and c != "SubSection"])
     return {
            (r.Title, r.SubSection): [r[str(i)] for i in range(max_dim + 1)] for _, r in df.iterrows()
     }
 
-document_embeddings = compute_doc_embeddings(df)
+#document_embeddings = compute_doc_embeddings(df)
+
+str_document_embeddings = {str(key): value for key, value in document_embeddings.items()}
+with open('document_embeddings.json', 'w') as file:
+    json.dump(str_document_embeddings, file)
 
 def vector_similarity(x: 'list[float]', y: 'list[float]') -> float:
+    global count
+    #print(f"calculating vector similarity: Count: {count}")
+    count = count + 1
     # Returns the similarity between two vectors. Because OpenAI Embeddings are normalized to length 1, the cosine similarity is the same as the dot product.
     return np.dot(np.array(x), np.array(y))
+
 def order_document_sections_by_query_similarity(query: str, contexts: 'dict[(str, str), np.array]') -> 'list[(float, (str, str))]':
     #Find the query embedding for the supplied query, and compare it against all of the pre-calculated document embeddings
     #to find the most relevant sections. 
-    
+    #print(f"ordering document sections by similarity for: {query}")
     #Return the list of document sections, sorted by relevance in descending order.
     query_embedding = get_embedding(query)
     
@@ -68,10 +73,9 @@ def order_document_sections_by_query_similarity(query: str, contexts: 'dict[(str
     
     return document_similarities
 
-order_document_sections_by_query_similarity(question, document_embeddings)[:5]
+#order_document_sections_by_query_similarity(question, document_embeddings)[:5]
 
-
-MAX_SECTION_LEN = 3000
+MAX_SECTION_LEN = 2500
 SEPARATOR = "\n* "
 ENCODING = "gpt2"  # encoding for text-davinci-003
 
@@ -80,9 +84,8 @@ separator_len = len(encoding.encode(SEPARATOR))
 
 f"Context separator contains {separator_len} tokens"
 
-
 def construct_prompt(question: str, context_embeddings: dict, df: pd.DataFrame) -> str:
-    
+    #print(f"constructing prompt")
     #Fetch relevant 
     
     most_relevant_document_sections = order_document_sections_by_query_similarity(question, context_embeddings)
@@ -106,10 +109,9 @@ def construct_prompt(question: str, context_embeddings: dict, df: pd.DataFrame) 
     #print(f"Selected {len(chosen_sections)} document sections:")
     #print("\n".join(chosen_sections_indexes))
     
-    header = """You will provide me with answers from the given context below. If the answer is not included in the text, say exactly "Hmm, I am not sure. Could you rephrase the question?" and stop after that. NEVER mention "the context" or similar in your answer. Answer the question as truthfully as possible using the context, in a warm, educated, and British manner.\n\nContext:\n"""
+    header = """You will provide me with answers from the given context below. NEVER mention "the context" or similar in your answer. Answer the question as truthfully as possible using the context, in a warm, educated manner.\n\nContext:\n"""
     
     return header + "".join(chosen_sections) + "\n\n Q: " + question + "\n A:"
-
 
 COMPLETIONS_API_PARAMS = {
     "temperature": 0.0, # We use temperature close to 0.0 because it gives the most predictable, factual answer.
@@ -128,7 +130,7 @@ def answer_query_with_context(
         document_embeddings,
         df
     )
-    
+    #print(f"answering query with context")
     if show_prompt:
         print(prompt)
 
@@ -139,4 +141,14 @@ def answer_query_with_context(
 
     return response["choices"][0]["text"].strip(" \n")
 
-print("Answer: ", answer_query_with_context(question, df, document_embeddings),"\n\n")
+
+def get_question(message: str, answer:str):
+    count = 0
+    question = input(f"{message}")
+    question = answer + " " + question
+    answer = answer_query_with_context(question, df, document_embeddings)
+    print(answer, "\n")
+    message = "What else would you like to ask?\n"
+    get_question(message, answer)
+
+get_question(message, "Thanks.")
