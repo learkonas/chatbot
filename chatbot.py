@@ -22,8 +22,7 @@ df = df.set_index(["Title", "SubSection"])
 #de_df = pd.read_csv("./document_embeddings.csv", encoding = 'cp850')
 #de_df = df.set_index(["doc_id", "embedding"])
 
-#print(f"{len(df)} rows in the data.")
-
+#print(f"{len(df)} articles in the data.")
 
 def get_embedding(text: str, model: str=EMBEDDING_MODEL) -> 'list[float]':
     #print(f"getting embedding")
