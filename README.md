@@ -1,2 +1,2 @@
 I wrote this script to turn the articles published on [Culture3](https://culture3.xyz) into a vector embeddings and thus a chatbot that could talk about them.
-Next step is to make it use the context better.
+I then re-purposed it to explain the UK's SEND Code of Practice. Work in progress.

@@ -6,21 +6,18 @@ import tiktoken
 from env import OPENAI_API_KEY
 openai.api_key = OPENAI_API_KEY
 import json
-with open('document_embeddings.json', 'r') as file:
+with open('document_embeddings_SEND.json', 'r') as file:
  loaded_data = json.load(file)
 document_embeddings = {eval(key): value for key, value in loaded_data.items()}
 
 count = 1
 
-COMPLETIONS_MODEL = "gpt-3.5-turbo-instruct"
-EMBEDDING_MODEL = "text-embedding-ada-002"
-message = "Hi! What would you like to learn about the articles on Culture3?\n"
+COMPLETIONS_MODEL = "gpt-3.5-turbo-0125"
+EMBEDDING_MODEL = "text-embedding-3-small" #alt: "text-embedding-ada-002"
+message = "Hi! What would you like to ask about the content?\n"
 
-df = pd.read_csv("./c3posts.csv", encoding = 'cp850')
-df = df.set_index(["Title", "SubSection"])
-
-#de_df = pd.read_csv("./document_embeddings.csv", encoding = 'cp850')
-#de_df = df.set_index(["doc_id", "embedding"])
+df = pd.read_csv("./send_csv.csv", encoding = 'cp850')
+#df = df.set_index(["Title", "Content"])
 
 #print(f"{len(df)} articles in the data.")
 
@@ -41,15 +38,15 @@ def compute_doc_embeddings(df: pd.DataFrame) -> "dict['tuple[str, str]', 'list[f
 def load_embeddings(fname: str) -> "dict['tuple[str, str]', 'list[float]']":
     print(f"loading embeddings for ${fname}")
     df = pd.read_csv(fname, header=0)
-    max_dim = max([int(c) for c in df.columns if c != "Title" and c != "SubSection"])
+    max_dim = max([int(c) for c in df.columns if c != "Title"])
     return {
-           (r.Title, r.SubSection): [r[str(i)] for i in range(max_dim + 1)] for _, r in df.iterrows()
+           (r.Title): [r[str(i)] for i in range(max_dim + 1)] for _, r in df.iterrows()
     }
 
 #document_embeddings = compute_doc_embeddings(df)
 
 str_document_embeddings = {str(key): value for key, value in document_embeddings.items()}
-with open('document_embeddings.json', 'w') as file:
+with open('document_embeddings_SEND.json', 'w') as file:
     json.dump(str_document_embeddings, file)
 
 def vector_similarity(x: 'list[float]', y: 'list[float]') -> float:
@@ -108,13 +105,13 @@ def construct_prompt(question: str, context_embeddings: dict, df: pd.DataFrame) 
     #print(f"Selected {len(chosen_sections)} document sections:")
     #print("\n".join(chosen_sections_indexes))
     
-    header = """You will provide me with answers from the given context below. NEVER mention "the context" or similar in your answer. Answer the question as truthfully as possible using the context, in a warm, educated manner.\n\nContext:\n"""
+    header = """You will provide me with answers from the given context below. Directly quote from the context wherever possible and cite the bullet point you are referencing. Answer the question as truthfully as possible using the context, in a warm, educated manner.\n\nContext:\n"""
     
     return header + "".join(chosen_sections) + "\n\n Q: " + question + "\n A:"
 
 COMPLETIONS_API_PARAMS = {
     "temperature": 0.0, # We use temperature close to 0.0 because it gives the most predictable, factual answer.
-    "max_tokens": 1300,
+    "max_tokens": 2500,
     "model": COMPLETIONS_MODEL,
 }
 
